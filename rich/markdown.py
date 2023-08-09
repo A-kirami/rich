@@ -185,10 +185,9 @@ class CodeBlock(TextElement):
         self, console: Console, options: ConsoleOptions
     ) -> RenderResult:
         code = str(self.text).rstrip()
-        syntax = Syntax(
+        yield Syntax(
             code, self.lexer_name, theme=self.theme, word_wrap=True, padding=1
         )
-        yield syntax
 
 
 class BlockQuote(TextElement):
@@ -412,7 +411,7 @@ class ListItem(TextElement):
 
         new_line = Segment("\n")
         padding = Segment(" " * number_width, number_style)
-        numeral = Segment(f"{number}".rjust(number_width - 1) + " ", number_style)
+        numeral = Segment(f'{f"{number}".rjust(number_width - 1)} ', number_style)
         for first, line in loop_first(lines):
             yield numeral if first else padding
             yield from line
@@ -466,8 +465,7 @@ class ImageItem(TextElement):
         title = self.text or Text(self.destination.strip("/").rsplit("/", 1)[-1])
         if self.hyperlinks:
             title.stylize(link_style)
-        text = Text.assemble("🌆 ", title, " ", end="")
-        yield text
+        yield Text.assemble("🌆 ", title, " ", end="")
 
 
 class MarkdownContext:
@@ -514,8 +512,7 @@ class MarkdownContext:
 
     def leave_style(self) -> Style:
         """Leave a style context."""
-        style = self.style_stack.pop()
-        return style
+        return self.style_stack.pop()
 
 
 class Markdown(JupyterMixin):
@@ -579,7 +576,7 @@ class Markdown(JupyterMixin):
         for token in tokens:
             is_fence = token.type == "fence"
             is_image = token.tag == "img"
-            if token.children and not (is_image or is_fence):
+            if token.children and not is_image and not is_fence:
                 yield from self._flatten_tokens(token.children)
             else:
                 yield token
@@ -608,8 +605,6 @@ class Markdown(JupyterMixin):
 
             entering = token.nesting == 1
             exiting = token.nesting == -1
-            self_closing = token.nesting == 0
-
             if node_type == "text":
                 context.on_text(token.content, node_type)
             elif node_type == "hardbreak":
@@ -617,9 +612,9 @@ class Markdown(JupyterMixin):
             elif node_type == "softbreak":
                 context.on_text(" ", node_type)
             elif node_type == "link_open":
-                href = str(token.attrs.get("href", ""))
                 if self.hyperlinks:
                     link_style = console.get_style("markdown.link_url", default="none")
+                    href = str(token.attrs.get("href", ""))
                     link_style += Style(link=href)
                     context.enter_style(link_style)
                 else:
@@ -666,6 +661,8 @@ class Markdown(JupyterMixin):
                 element_class = self.elements.get(token.type) or UnknownElement
                 element = element_class.create(self, token)
 
+                self_closing = token.nesting == 0
+
                 if entering or self_closing:
                     context.stack.push(element)
                     element.on_enter(context)
@@ -673,12 +670,10 @@ class Markdown(JupyterMixin):
                 if exiting:  # CLOSING tag
                     element = context.stack.pop()
 
-                    should_render = not context.stack or (
+                    if should_render := not context.stack or (
                         context.stack
                         and context.stack.top.on_child_close(context, element)
-                    )
-
-                    if should_render:
+                    ):
                         if new_line:
                             yield _new_line_segment
 
@@ -689,12 +684,11 @@ class Markdown(JupyterMixin):
                     if text is not None:
                         element.on_text(context, text)
 
-                    should_render = (
+                    if should_render := (
                         not context.stack
                         or context.stack
                         and context.stack.top.on_child_close(context, element)
-                    )
-                    if should_render:
+                    ):
                         if new_line:
                             yield _new_line_segment
                         yield from console.render(element, context.options)

@@ -346,8 +346,7 @@ class Style:
             sgr: List[str] = []
             append = sgr.append
             _style_map = self._style_map
-            attributes = self._attributes & self._set_attributes
-            if attributes:
+            if attributes := self._attributes & self._set_attributes:
                 if attributes & 1:
                     append(_style_map[0])
                 if attributes & 2:
@@ -541,11 +540,11 @@ class Style:
                 attributes[attribute] = False
 
             elif word == "link":
-                word = next(words, "")
-                if not word:
-                    raise errors.StyleSyntaxError("URL expected after 'link'")
-                link = word
+                if word := next(words, ""):
+                    link = word
 
+                else:
+                    raise errors.StyleSyntaxError("URL expected after 'link'")
             elif word in STYLE_ATTRIBUTES:
                 attributes[STYLE_ATTRIBUTES[word]] = True
 
@@ -557,8 +556,7 @@ class Style:
                         f"unable to parse {word!r} as color; {error}"
                     ) from None
                 color = word
-        style = Style(color=color, bgcolor=bgcolor, link=link, **attributes)
-        return style
+        return Style(color=color, bgcolor=bgcolor, link=link, **attributes)
 
     @lru_cache(maxsize=1024)
     def get_html_style(self, theme: Optional[TerminalTheme] = None) -> str:
